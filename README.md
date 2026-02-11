@@ -1,0 +1,3 @@
+This project focuses on building an AI-powered Knowledge Graph from enterprise-style organizational data. The system ingests raw datasets, performs preprocessing and transformation, enriches the data using AI techniques, and prepares it for graph-based analysis and enterprise intelligence applications.
+
+The goal is to simulate a real-world enterprise data engineering pipeline that supports intelligent querying and relationship discovery.
