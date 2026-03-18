@@ -38,3 +38,55 @@ Run:
 ```bash
 cd milestone2_graph
 python build_graph.py
+
+
+✅ Milestone 3 — Semantic Search + RAG
+
+This project Milestone 3 combines:
+- Knowledge Graph (Neo4j)
+- Semantic Search (Pinecone)
+- LLM (LLaMA via Ollama)
+- RAG Pipeline
+
+🔹 Step 1: Upload embeddings
+cd milestone3_rag
+python pinecone_index.py
+
+🔹 Step 2: Test semantic search
+python search_pinecone.py
+
+🔹 Step 3: Run full RAG system
+python rag_pipeline.py
+
+
+🛠️ Technologies Used
+Python
+
+Neo4j (Graph Database)
+
+Pinecone (Vector Database)
+
+Sentence Transformers (Embeddings)
+
+Ollama (LLaMA Model)
+
+Pandas
+
+
+
+🧠 How It Works
+User Query
+   ↓
+Embedding Model (Sentence Transformers)
+   ↓
+Pinecone (Semantic Search)
+   ↓
+Top Relevant Companies
+   ↓
+Neo4j (Graph Query)
+   ↓
+Context Retrieval
+   ↓
+LLaMA (Ollama)
+   ↓
+Final Answer
