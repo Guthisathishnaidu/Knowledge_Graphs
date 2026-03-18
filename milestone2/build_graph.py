@@ -5,9 +5,9 @@ import requests
 import re
 from neo4j import GraphDatabase
 
-# -------------------------
+
 # Neo4j Configuration
-# -------------------------
+
 
 NEO4J_URI = "bolt://localhost:7687"
 NEO4J_USER = "neo4j"
@@ -18,9 +18,9 @@ driver = GraphDatabase.driver(
     auth=(NEO4J_USER, NEO4J_PASSWORD)
 )
 
-# -------------------------
+
 # LLaMA Entity Extraction
-# -------------------------
+
 
 def extract_entities(row):
 
@@ -77,9 +77,9 @@ Return ONLY valid JSON in this format:
         return None
 
 
-# -------------------------
+
 # Insert into Neo4j
-# -------------------------
+
 
 def insert_graph(tx, company, country, industry):
 
@@ -106,15 +106,15 @@ def build_graph(entity_json):
         )
 
 
-# -------------------------
+
 # Main Pipeline
-# -------------------------
+
 
 def run():
 
     print("Reading dataset...")
 
-    df = pd.read_csv("data/processed/processed_companies.csv")
+    df = pd.read_csv("../data/processed/processed_companies.csv")
 
     df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
 
