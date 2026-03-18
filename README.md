@@ -38,9 +38,10 @@ Run:
 ```bash
 cd milestone2_graph
 python build_graph.py
+```
 
 
-✅ Milestone 3 — Semantic Search + RAG
+# ✅ Milestone 3 — Semantic Search + RAG
 
 This project Milestone 3 combines:
 - Knowledge Graph (Neo4j)
