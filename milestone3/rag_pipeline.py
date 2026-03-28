@@ -21,7 +21,14 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(INDEX_NAME)
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
+from functools import lru_cache
+from sentence_transformers import SentenceTransformer
+
+@lru_cache(maxsize=1)
+def get_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+model = get_model()
 
 driver = GraphDatabase.driver(
     NEO4J_URI,
@@ -38,7 +45,7 @@ def search_companies(query):
 
     results = index.query(
         vector=query_vector,
-        top_k=3,
+        top_k=2,
         include_metadata=True
     )
 
@@ -96,7 +103,36 @@ Give a short and direct answer.
         }
     )
 
-    return response.json()["response"]
+def ask_llama(context, question):
+
+    prompt = f"""
+Answer clearly and professionally.
+
+Context:
+{context}
+
+Question:
+{question}
+
+Give a short and direct answer.
+"""
+
+    response = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": "llama3",
+            "prompt": prompt,
+            "stream": False
+        }
+    )
+
+    data = response.json()
+
+    # ✅ SAFE HANDLING
+    if "response" in data:
+        return data["response"]
+    else:
+        return f"LLM Error: {data}"
 
 #  MAIN PIPELINE
 
