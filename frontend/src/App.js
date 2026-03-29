@@ -4,38 +4,34 @@ import "./App.css";
 
 const API = "http://localhost:8000";
 
-// ── Animated counter hook ────────────────────────────────
 function useCountUp(target, duration = 800) {
   const [val, setVal] = useState(0);
   useEffect(() => {
     if (!target) return;
-    let start = 0;
+    let n = 0;
     const step = Math.ceil(target / (duration / 30));
-    const timer = setInterval(() => {
-      start = Math.min(start + step, target);
-      setVal(start);
-      if (start >= target) clearInterval(timer);
+    const t = setInterval(() => {
+      n = Math.min(n + step, target);
+      setVal(n);
+      if (n >= target) clearInterval(t);
     }, 30);
-    return () => clearInterval(timer);
+    return () => clearInterval(t);
   }, [target, duration]);
   return val;
 }
 
-// ── Toast ────────────────────────────────────────────────
 function Toast({ toasts }) {
   return (
     <div className="toast-container">
       {toasts.map((t) => (
         <div key={t.id} className={`toast ${t.type}`}>
-          <span>{t.icon}</span>
-          <span>{t.msg}</span>
+          <span>{t.icon}</span><span>{t.msg}</span>
         </div>
       ))}
     </div>
   );
 }
 
-// ── Stat tile ────────────────────────────────────────────
 function StatTile({ icon, label, value, colorClass }) {
   const animated = useCountUp(value);
   return (
@@ -47,33 +43,28 @@ function StatTile({ icon, label, value, colorClass }) {
   );
 }
 
-// ── Main App ─────────────────────────────────────────────
 export default function App() {
-  // Data state
   const [stats,       setStats]       = useState({});
   const [graphData,   setGraphData]   = useState({ nodes: [], edges: [] });
   const [health,      setHealth]      = useState({});
   const [query,       setQuery]       = useState("");
   const [loading,     setLoading]     = useState(false);
   const [answer,      setAnswer]      = useState(null);
-  const [answerState, setAnswerState] = useState("idle"); // idle | loading | active | error
+  const [answerState, setAnswerState] = useState("idle");
   const [results,     setResults]     = useState([]);
   const [highlights,  setHighlights]  = useState([]);
   const [source,      setSource]      = useState("mock");
   const [history,     setHistory]     = useState([]);
   const [activeTab,   setActiveTab]   = useState("graph");
   const [toasts,      setToasts]      = useState([]);
-
   const inputRef = useRef(null);
 
-  // ── Toast helper ────────────────────────────────────────
   const toast = useCallback((msg, type = "info", icon = "ℹ️") => {
     const id = Date.now();
-    setToasts((prev) => [...prev, { id, msg, type, icon }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3200);
+    setToasts((p) => [...p, { id, msg, type, icon }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3200);
   }, []);
 
-  // ── Fetch on mount ──────────────────────────────────────
   useEffect(() => {
     fetchHealth();
     fetchStats();
@@ -100,27 +91,19 @@ export default function App() {
   async function fetchGraph() {
     try {
       const r = await fetch(`${API}/graph`);
-      const d = await r.json();
-      setGraphData(d);
+      setGraphData(await r.json());
     } catch {
       toast("Using demo graph data", "info", "📊");
     }
   }
 
-  // ── Search ───────────────────────────────────────────────
   async function handleSearch() {
     if (!query.trim() || loading) return;
-
     setLoading(true);
     setAnswerState("loading");
     setResults([]);
     setHighlights([]);
-
-    // History
-    setHistory((prev) => {
-      const next = [query, ...prev.filter((q) => q !== query)].slice(0, 8);
-      return next;
-    });
+    setHistory((p) => [query, ...p.filter((q2) => q2 !== query)].slice(0, 8));
 
     try {
       const resp = await fetch(`${API}/query`, {
@@ -128,21 +111,17 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
       });
-
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
-
       setResults(data.details || data.companies?.map((c) => ({ company: c })) || []);
       setAnswer(data.answer);
       setAnswerState("active");
       setSource(data.source || "mock");
       setHighlights(data.companies || []);
       toast("Query complete", "success", "✅");
-    } catch (err) {
+    } catch {
       setAnswerState("error");
-      setAnswer(
-        "Cannot reach the backend.\n\nRun this in your terminal:\n\ncd backend\nuvicorn api:app --reload --port 8000"
-      );
+      setAnswer("Cannot reach the backend.\n\nRun in your terminal:\n\n  cd backend\n  uvicorn api:app --reload --port 8000");
       toast("Backend unreachable", "error", "❌");
     } finally {
       setLoading(false);
@@ -154,99 +133,56 @@ export default function App() {
     if (val === "mock") return "mock";
     return "error";
   }
-
-  function pillLabel(key, val) {
-    const map = { connected: "Live", ready: "Ready", mock: "Mock", error: "Down", unavailable: "Down" };
-    return map[val] || val || "—";
+  function pillLabel(val) {
+    return { connected:"Live", ready:"Ready", mock:"Mock", error:"Down", unavailable:"Down" }[val] || val || "—";
   }
 
-  // ── Tag builder ─────────────────────────────────────────
   const companies  = [...new Set(results.map((r) => r.company).filter(Boolean))];
   const countries  = [...new Set(results.map((r) => r.country).filter(Boolean))];
   const industries = [...new Set(results.map((r) => r.industry).filter(Boolean))];
 
   return (
     <div className="app-shell">
-      {/* ── TOPBAR ──────────────────────────────── */}
+
+      {/* ── TOPBAR ─────────────────────────────────── */}
       <header className="topbar">
         <div className="topbar-brand">
           <div className="brand-logo">⬡</div>
-          <div className="brand-name">
-            Graph<span>Mind</span>
-          </div>
+          <div className="brand-name">Graph<span>Mind</span></div>
           <span className="brand-tag">AI</span>
         </div>
-
         <div className="status-row">
-          {[
-            { label: "NEO4J",    val: health.neo4j },
-            { label: "PINECONE", val: health.pinecone },
-            { label: "LLM",      val: health.llm },
-          ].map(({ label, val }) => (
+          {[["NEO4J", health.neo4j], ["PINECONE", health.pinecone], ["LLM", health.llm]].map(([label, val]) => (
             <div key={label} className={`status-pill ${pillClass(val)}`}>
               <span className="status-dot" />
-              {label} · {pillLabel(label, val)}
+              {label} · {pillLabel(val)}
             </div>
           ))}
         </div>
       </header>
 
-      {/* ── BODY ────────────────────────────────── */}
+      {/* ── BODY ───────────────────────────────────── */}
       <div className="app-body">
 
-        {/* ── SIDEBAR ─────────────────────────── */}
+        {/* ── SIDEBAR ────────────────────────────── */}
         <aside className="sidebar">
-
           {/* Stats */}
           <div className="sidebar-section">
             <div className="section-label">Overview</div>
             <div className="stats-grid">
-              <StatTile icon="🏢" label="Companies"  value={stats.companies}  colorClass="blue" />
-              <StatTile icon="🌍" label="Countries"  value={stats.countries}  colorClass="teal" />
+              <StatTile icon="🏢" label="Companies"  value={stats.companies}  colorClass="blue"   />
+              <StatTile icon="🌍" label="Countries"  value={stats.countries}  colorClass="teal"   />
               <StatTile icon="⚙️" label="Industries" value={stats.industries} colorClass="violet" />
-              <StatTile icon="🔗" label="Relations"  value={stats.relations}  colorClass="amber" />
+              <StatTile icon="🔗" label="Relations"  value={stats.relations}  colorClass="amber"  />
             </div>
           </div>
 
-          {/* Search */}
-          <div className="sidebar-section">
-            <div className="section-label">Query</div>
-            <div className="search-field">
-              <span className="search-field-icon">🔍</span>
-              <input
-                ref={inputRef}
-                className="search-input"
-                type="text"
-                placeholder="e.g. plastic companies in Asia…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              />
-            </div>
-            <button
-              className="search-btn"
-              onClick={handleSearch}
-              disabled={loading || !query.trim()}
-            >
-              {loading ? (
-                <>
-                  <span className="dot-wave">
-                    <span /><span /><span />
-                  </span>
-                  Analyzing…
-                </>
-              ) : (
-                <> ▶ &nbsp;Run Query </>
-              )}
-            </button>
-          </div>
-
-          {/* Results */}
+          {/* Top Matches (sidebar) */}
           <div className="sidebar-section">
             <div className="section-label">Top Matches</div>
             {results.length === 0 ? (
               <div className="empty-state" style={{ padding: "16px 0" }}>
-                <span className="empty-icon">⬡</span>
+                <span className="empty-icon" style={{ fontSize: 24 }}>⬡</span>
                 <span className="empty-hint">Run a query to see results</span>
               </div>
             ) : (
@@ -261,7 +197,7 @@ export default function App() {
                       onClick={() => setHighlights([name])}
                     >
                       <div className="result-avatar">
-                        {["🏢", "🏭", "🏬", "🏗️"][i % 4]}
+                        {["🏢","🏭","🏬","🏗️"][i % 4]}
                       </div>
                       <div>
                         <div className="result-name">{name}</div>
@@ -287,7 +223,7 @@ export default function App() {
                   <div
                     key={i}
                     className="history-item"
-                    onClick={() => { setQuery(q); setTimeout(handleSearch, 50); }}
+                    onClick={() => { setQuery(q); setTimeout(handleSearch, 80); }}
                   >
                     ↺ {q}
                   </div>
@@ -297,16 +233,41 @@ export default function App() {
           )}
         </aside>
 
-        {/* ── MAIN PANEL ──────────────────────── */}
+        {/* ── MAIN PANEL ───────────────────────── */}
         <main className="main-panel">
 
-          {/* Answer */}
+          {/* ════ SEARCH BAR — TOP OF MAIN ════ */}
+          <div className="main-search-bar">
+            <div className="main-search-inner">
+              <span className="main-search-icon">🔍</span>
+              <input
+                ref={inputRef}
+                className="main-search-input"
+                type="text"
+                placeholder="Ask a business question… e.g. Which companies are in the plastics industry?"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              />
+              <button
+                className="main-search-btn"
+                onClick={handleSearch}
+                disabled={loading || !query.trim()}
+              >
+                {loading ? (
+                  <span className="dot-wave"><span /><span /><span /></span>
+                ) : (
+                  "▶  Run Query"
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* ════ AI INSIGHT ════ */}
           <div className="answer-section">
             <div className="answer-header">
-              <div className="answer-title">
-                🤖 AI Insight
-              </div>
-              {source && answerState === "active" && (
+              <div className="answer-title">🤖 AI Insight</div>
+              {answerState === "active" && (
                 <span className={`source-badge ${source}`}>
                   {source === "live" ? "● Live" : "◎ Demo"}
                 </span>
@@ -316,14 +277,12 @@ export default function App() {
             <div className={`answer-card ${answerState === "active" ? "active" : ""} ${answerState === "error" ? "error" : ""}`}>
               {answerState === "idle" && (
                 <span className="answer-placeholder">
-                  Ask a business question to get AI-powered insights from the knowledge graph…
+                  Ask a business question above to get AI-powered insights from the knowledge graph…
                 </span>
               )}
               {answerState === "loading" && (
                 <div className="thinking-row">
-                  <span className="dot-wave">
-                    <span /><span /><span />
-                  </span>
+                  <span className="dot-wave"><span /><span /><span /></span>
                   Searching graph and generating answer…
                 </div>
               )}
@@ -344,23 +303,19 @@ export default function App() {
             )}
           </div>
 
-          {/* Tabs */}
+          {/* ════ TABS ════ */}
           <div className="tab-bar">
-            <button
-              className={`tab-btn ${activeTab === "graph" ? "active" : ""}`}
-              onClick={() => setActiveTab("graph")}
-            >
+            <button className={`tab-btn ${activeTab === "graph" ? "active" : ""}`}
+              onClick={() => setActiveTab("graph")}>
               🌐 Knowledge Graph
             </button>
-            <button
-              className={`tab-btn ${activeTab === "table" ? "active" : ""}`}
-              onClick={() => setActiveTab("table")}
-            >
+            <button className={`tab-btn ${activeTab === "table" ? "active" : ""}`}
+              onClick={() => setActiveTab("table")}>
               📋 Data Table
             </button>
           </div>
 
-          {/* Graph tab */}
+          {/* ════ GRAPH ════ */}
           {activeTab === "graph" && (
             <div className="graph-panel">
               <GraphView
@@ -368,16 +323,12 @@ export default function App() {
                 edges={graphData.edges}
                 highlightIds={highlights}
               />
-
-              {/* Controls */}
               <div className="graph-controls">
                 <button className="ctrl-btn" title="Fit view"       onClick={() => GraphView.resetView()}>⌖</button>
                 <button className="ctrl-btn" title="Zoom in"        onClick={() => GraphView.zoomIn()}>+</button>
                 <button className="ctrl-btn" title="Zoom out"       onClick={() => GraphView.zoomOut()}>−</button>
                 <button className="ctrl-btn" title="Toggle physics" onClick={() => GraphView.togglePhysics()}>⚛</button>
               </div>
-
-              {/* Legend */}
               <div className="graph-legend">
                 <div className="legend-heading">Node Types</div>
                 {[
@@ -386,10 +337,7 @@ export default function App() {
                   { color: "#7c3aed", bg: "#ede9fe", label: "Industry" },
                 ].map(({ color, bg, label }) => (
                   <div className="legend-row" key={label}>
-                    <div
-                      className="legend-dot"
-                      style={{ background: bg, border: `2px solid ${color}` }}
-                    />
+                    <div className="legend-dot" style={{ background: bg, border: `2px solid ${color}` }} />
                     {label}
                   </div>
                 ))}
@@ -397,7 +345,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Table tab */}
+          {/* ════ TABLE ════ */}
           {activeTab === "table" && (
             <div className="table-panel">
               {results.length === 0 ? (
@@ -410,17 +358,14 @@ export default function App() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>#</th>
-                      <th>Company</th>
-                      <th>Country</th>
-                      <th>Industry</th>
+                      <th>#</th><th>Company</th><th>Country</th><th>Industry</th>
                     </tr>
                   </thead>
                   <tbody>
                     {results.map((r, i) => (
                       <tr key={i} style={{ animationDelay: `${i * 50}ms` }}>
-                        <td style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "var(--font-mono)" }}>
-                          {String(i + 1).padStart(2, "0")}
+                        <td style={{ color:"var(--text-muted)", fontSize:12, fontFamily:"var(--font-mono)" }}>
+                          {String(i+1).padStart(2,"0")}
                         </td>
                         <td className="td-company">{r.company || r}</td>
                         <td className="td-country">{r.country  || "—"}</td>
