@@ -118,7 +118,7 @@ if query:
             context = ""
             for company in companies:
                 info = get_company_info(company)
-                context += f"{company}: {info}\n"
+                context += f"{company}: {', '.join(info)}\n"
 
             answer = ask_llama(context, query)
 

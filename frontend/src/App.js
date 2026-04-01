@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import GraphView from "./GraphView";
+import GraphView, { GraphViewAPI } from "./GraphView";
 import "./App.css";
 
 const API = "http://localhost:8000";
 
+// ── Animated counter ─────────────────────────────────────
 function useCountUp(target, duration = 800) {
   const [val, setVal] = useState(0);
   useEffect(() => {
@@ -20,6 +21,7 @@ function useCountUp(target, duration = 800) {
   return val;
 }
 
+// ── Toast ─────────────────────────────────────────────────
 function Toast({ toasts }) {
   return (
     <div className="toast-container">
@@ -32,6 +34,7 @@ function Toast({ toasts }) {
   );
 }
 
+// ── Stat tile ─────────────────────────────────────────────
 function StatTile({ icon, label, value, colorClass }) {
   const animated = useCountUp(value);
   return (
@@ -43,6 +46,26 @@ function StatTile({ icon, label, value, colorClass }) {
   );
 }
 
+// ── CSV export helper ─────────────────────────────────────
+function exportCSV(results, query) {
+  if (!results.length) return;
+  const header = ["Company", "Country", "Industry"];
+  const rows   = results.map((r) => [
+    `"${(r.company  || "").replace(/"/g, '""')}"`,
+    `"${(r.country  || "").replace(/"/g, '""')}"`,
+    `"${(r.industry || "").replace(/"/g, '""')}"`,
+  ]);
+  const csv  = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `query-results-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Main App ──────────────────────────────────────────────
 export default function App() {
   const [stats,       setStats]       = useState({});
   const [graphData,   setGraphData]   = useState({ nodes: [], edges: [] });
@@ -57,6 +80,18 @@ export default function App() {
   const [history,     setHistory]     = useState([]);
   const [activeTab,   setActiveTab]   = useState("graph");
   const [toasts,      setToasts]      = useState([]);
+  const [queryCount,  setQueryCount]  = useState(0);
+
+  // ── NEW: node detail panel ─────────────────────────────
+  const [selectedNode, setSelectedNode] = useState(null);
+
+  // ── NEW: graph search & filter ─────────────────────────
+  const [graphSearch,  setGraphSearch]  = useState("");
+  const [typeFilters,  setTypeFilters]  = useState({
+    company: true, country: true, industry: true,
+  });
+  const [physicsLabel, setPhysicsLabel] = useState("Enable Physics");
+
   const inputRef = useRef(null);
 
   const toast = useCallback((msg, type = "info", icon = "ℹ️") => {
@@ -65,10 +100,13 @@ export default function App() {
     setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3200);
   }, []);
 
+  // ── Fetch on mount + auto-refresh health every 30s ─────
   useEffect(() => {
     fetchHealth();
     fetchStats();
     fetchGraph();
+    const healthInterval = setInterval(fetchHealth, 30000); // NEW: auto-refresh
+    return () => clearInterval(healthInterval);
     // eslint-disable-next-line
   }, []);
 
@@ -97,27 +135,41 @@ export default function App() {
     }
   }
 
+  // ── FIX: history click — pass query directly, no closure bug ──
+  function runQuery(q) {
+    setQuery(q);
+    executeSearch(q);
+  }
+
   async function handleSearch() {
-    if (!query.trim() || loading) return;
+    executeSearch(query);
+  }
+
+  async function executeSearch(q) {
+    if (!q.trim() || loading) return;
     setLoading(true);
     setAnswerState("loading");
     setResults([]);
     setHighlights([]);
-    setHistory((p) => [query, ...p.filter((q2) => q2 !== query)].slice(0, 8));
+    setSelectedNode(null);
+    setHistory((p) => [q, ...p.filter((x) => x !== q)].slice(0, 8));
 
     try {
       const resp = await fetch(`${API}/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query: q }),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
-      setResults(data.details || data.companies?.map((c) => ({ company: c })) || []);
+
+      const detailResults = data.details || data.companies?.map((c) => ({ company: c })) || [];
+      setResults(detailResults);
       setAnswer(data.answer);
       setAnswerState("active");
       setSource(data.source || "mock");
       setHighlights(data.companies || []);
+      setQueryCount((n) => n + 1);    // NEW: session query counter
       toast("Query complete", "success", "✅");
     } catch {
       setAnswerState("error");
@@ -128,13 +180,34 @@ export default function App() {
     }
   }
 
+  // ── NEW: graph search handler ──────────────────────────
+  function handleGraphSearch(e) {
+    const val = e.target.value;
+    setGraphSearch(val);
+    GraphViewAPI.searchNode(val);
+  }
+
+  // ── NEW: type filter toggle ────────────────────────────
+  function toggleTypeFilter(type) {
+    const next = { ...typeFilters, [type]: !typeFilters[type] };
+    setTypeFilters(next);
+    const visible = Object.entries(next).filter(([, v]) => v).map(([k]) => k);
+    GraphViewAPI.filterTypes(visible);
+  }
+
+  // ── NEW: physics toggle with label ────────────────────
+  function handleTogglePhysics() {
+    const isOn = GraphViewAPI.togglePhysics();
+    setPhysicsLabel(isOn ? "Disable Physics" : "Enable Physics");
+  }
+
   function pillClass(val) {
     if (val === "connected" || val === "ready") return "live";
     if (val === "mock") return "mock";
     return "error";
   }
   function pillLabel(val) {
-    return { connected:"Live", ready:"Ready", mock:"Mock", error:"Down", unavailable:"Down" }[val] || val || "—";
+    return { connected: "Live", ready: "Ready", mock: "Mock", error: "Down", unavailable: "Down" }[val] || val || "—";
   }
 
   const companies  = [...new Set(results.map((r) => r.company).filter(Boolean))];
@@ -144,13 +217,14 @@ export default function App() {
   return (
     <div className="app-shell">
 
-      {/* ── TOPBAR ─────────────────────────────────── */}
+      {/* ── TOPBAR ──────────────────────────────────── */}
       <header className="topbar">
         <div className="topbar-brand">
           <div className="brand-logo">⬡</div>
           <div className="brand-name">Graph<span>Mind</span></div>
           <span className="brand-tag">AI</span>
         </div>
+
         <div className="status-row">
           {[["NEO4J", health.neo4j], ["PINECONE", health.pinecone], ["LLM", health.llm]].map(([label, val]) => (
             <div key={label} className={`status-pill ${pillClass(val)}`}>
@@ -158,17 +232,29 @@ export default function App() {
               {label} · {pillLabel(val)}
             </div>
           ))}
+          {/* NEW: session query counter */}
+          {queryCount > 0 && (
+            <div className="status-pill session-badge">
+              🔍 {queryCount} {queryCount === 1 ? "query" : "queries"} this session
+            </div>
+          )}
+          {/* NEW: manual refresh health button */}
+          <button className="refresh-btn" onClick={fetchHealth} title="Refresh service status">⟳</button>
         </div>
       </header>
 
-      {/* ── BODY ───────────────────────────────────── */}
+      {/* ── BODY ────────────────────────────────────── */}
       <div className="app-body">
 
-        {/* ── SIDEBAR ────────────────────────────── */}
+        {/* ── SIDEBAR ──────────────────────────────── */}
         <aside className="sidebar">
+
           {/* Stats */}
           <div className="sidebar-section">
-            <div className="section-label">Overview</div>
+            <div className="section-label">
+              Overview
+              <button className="mini-btn" onClick={() => { fetchStats(); fetchGraph(); }} title="Refresh stats">⟳</button>
+            </div>
             <div className="stats-grid">
               <StatTile icon="🏢" label="Companies"  value={stats.companies}  colorClass="blue"   />
               <StatTile icon="🌍" label="Countries"  value={stats.countries}  colorClass="teal"   />
@@ -177,9 +263,21 @@ export default function App() {
             </div>
           </div>
 
-          {/* Top Matches (sidebar) */}
+          {/* Top Matches */}
           <div className="sidebar-section">
-            <div className="section-label">Top Matches</div>
+            <div className="section-label">
+              Top Matches
+              {/* NEW: CSV Export button */}
+              {results.length > 0 && (
+                <button
+                  className="mini-btn export-btn"
+                  onClick={() => { exportCSV(results, query); toast("CSV downloaded", "success", "📥"); }}
+                  title="Export results as CSV"
+                >
+                  ↓ CSV
+                </button>
+              )}
+            </div>
             {results.length === 0 ? (
               <div className="empty-state" style={{ padding: "16px 0" }}>
                 <span className="empty-icon" style={{ fontSize: 24 }}>⬡</span>
@@ -196,9 +294,7 @@ export default function App() {
                       style={{ animationDelay: `${i * 70}ms` }}
                       onClick={() => setHighlights([name])}
                     >
-                      <div className="result-avatar">
-                        {["🏢","🏭","🏬","🏗️"][i % 4]}
-                      </div>
+                      <div className="result-avatar">{["🏢","🏭","🏬","🏗️"][i % 4]}</div>
                       <div>
                         <div className="result-name">{name}</div>
                         {(r.country || r.industry) && (
@@ -223,7 +319,7 @@ export default function App() {
                   <div
                     key={i}
                     className="history-item"
-                    onClick={() => { setQuery(q); setTimeout(handleSearch, 80); }}
+                    onClick={() => runQuery(q)}  // FIX: no closure bug
                   >
                     ↺ {q}
                   </div>
@@ -233,10 +329,10 @@ export default function App() {
           )}
         </aside>
 
-        {/* ── MAIN PANEL ───────────────────────── */}
+        {/* ── MAIN PANEL ──────────────────────────── */}
         <main className="main-panel">
 
-          {/* ════ SEARCH BAR — TOP OF MAIN ════ */}
+          {/* Search bar */}
           <div className="main-search-bar">
             <div className="main-search-inner">
               <span className="main-search-icon">🔍</span>
@@ -256,14 +352,12 @@ export default function App() {
               >
                 {loading ? (
                   <span className="dot-wave"><span /><span /><span /></span>
-                ) : (
-                  "▶  Run Query"
-                )}
+                ) : "▶  Run Query"}
               </button>
             </div>
           </div>
 
-          {/* ════ AI INSIGHT ════ */}
+          {/* AI Insight */}
           <div className="answer-section">
             <div className="answer-header">
               <div className="answer-title">🤖 AI Insight</div>
@@ -293,7 +387,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Entity tags */}
             {(companies.length > 0 || countries.length > 0 || industries.length > 0) && (
               <div className="tag-row">
                 {companies.map((c)  => <span key={c} className="entity-tag company">🏢 {c}</span>)}
@@ -303,49 +396,98 @@ export default function App() {
             )}
           </div>
 
-          {/* ════ TABS ════ */}
+          {/* Tabs */}
           <div className="tab-bar">
-            <button className={`tab-btn ${activeTab === "graph" ? "active" : ""}`}
-              onClick={() => setActiveTab("graph")}>
-              🌐 Knowledge Graph
-            </button>
-            <button className={`tab-btn ${activeTab === "table" ? "active" : ""}`}
-              onClick={() => setActiveTab("table")}>
-              📋 Data Table
-            </button>
+            <button className={`tab-btn ${activeTab === "graph" ? "active" : ""}`} onClick={() => setActiveTab("graph")}>🌐 Knowledge Graph</button>
+            <button className={`tab-btn ${activeTab === "table" ? "active" : ""}`} onClick={() => setActiveTab("table")}>📋 Data Table</button>
           </div>
 
-          {/* ════ GRAPH ════ */}
+          {/* ── GRAPH TAB ── */}
           {activeTab === "graph" && (
             <div className="graph-panel">
               <GraphView
                 nodes={graphData.nodes}
                 edges={graphData.edges}
                 highlightIds={highlights}
+                onNodeClick={setSelectedNode}   // NEW: node click detail
               />
+
+              {/* Graph toolbar */}
               <div className="graph-controls">
-                <button className="ctrl-btn" title="Fit view"       onClick={() => GraphView.resetView()}>⌖</button>
-                <button className="ctrl-btn" title="Zoom in"        onClick={() => GraphView.zoomIn()}>+</button>
-                <button className="ctrl-btn" title="Zoom out"       onClick={() => GraphView.zoomOut()}>−</button>
-                <button className="ctrl-btn" title="Toggle physics" onClick={() => GraphView.togglePhysics()}>⚛</button>
+                <button className="ctrl-btn" title="Fit view"  onClick={() => GraphViewAPI.resetView()}>⌖</button>
+                <button className="ctrl-btn" title="Zoom in"   onClick={() => GraphViewAPI.zoomIn()}>+</button>
+                <button className="ctrl-btn" title="Zoom out"  onClick={() => GraphViewAPI.zoomOut()}>−</button>
+                <button className="ctrl-btn" title={physicsLabel} onClick={handleTogglePhysics}>⚛</button>
+                <button className="ctrl-btn" title="Export PNG" onClick={() => { GraphViewAPI.exportImage(); toast("Graph exported", "success", "🖼️"); }}>⬇</button>
               </div>
+
+              {/* NEW: Graph search box */}
+              <div className="graph-search-box">
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>🔎</span>
+                <input
+                  className="graph-search-input"
+                  placeholder="Search nodes…"
+                  value={graphSearch}
+                  onChange={handleGraphSearch}
+                />
+                {graphSearch && (
+                  <button
+                    className="graph-search-clear"
+                    onClick={() => { setGraphSearch(""); GraphViewAPI.searchNode(""); }}
+                  >✕</button>
+                )}
+              </div>
+
+              {/* Legend + NEW: type filter */}
               <div className="graph-legend">
                 <div className="legend-heading">Node Types</div>
                 {[
-                  { color: "#2563eb", bg: "#dbeafe", label: "Company" },
-                  { color: "#0d9488", bg: "#ccfbf1", label: "Country" },
-                  { color: "#7c3aed", bg: "#ede9fe", label: "Industry" },
-                ].map(({ color, bg, label }) => (
-                  <div className="legend-row" key={label}>
-                    <div className="legend-dot" style={{ background: bg, border: `2px solid ${color}` }} />
-                    {label}
+                  { type: "company",  color: "#2563eb", bg: "#dbeafe", label: "Company" },
+                  { type: "country",  color: "#0d9488", bg: "#ccfbf1", label: "Country" },
+                  { type: "industry", color: "#7c3aed", bg: "#ede9fe", label: "Industry" },
+                ].map(({ type, color, bg, label }) => (
+                  <div
+                    key={type}
+                    className={`legend-row clickable-filter ${typeFilters[type] ? "" : "dimmed"}`}
+                    onClick={() => toggleTypeFilter(type)}
+                    title={`Click to ${typeFilters[type] ? "hide" : "show"} ${label} nodes`}
+                  >
+                    <div className="legend-dot" style={{ background: bg, border: `2px solid ${color}`, opacity: typeFilters[type] ? 1 : 0.3 }} />
+                    <span style={{ opacity: typeFilters[type] ? 1 : 0.4 }}>{label}</span>
                   </div>
                 ))}
+                <div className="legend-hint">Click to filter</div>
               </div>
+
+              {/* NEW: Node detail panel */}
+              {selectedNode && (
+                <div className="node-detail-panel">
+                  <div className="node-detail-header">
+                    <span className={`node-detail-badge ${selectedNode.type}`}>
+                      {{ company: "🏢", country: "🌍", industry: "⚙️" }[selectedNode.type] || "⬡"} {selectedNode.type}
+                    </span>
+                    <button className="node-detail-close" onClick={() => setSelectedNode(null)}>✕</button>
+                  </div>
+                  <div className="node-detail-name">{selectedNode.id}</div>
+                  {selectedNode.connections?.length > 0 && (
+                    <>
+                      <div className="node-detail-section">Connections ({selectedNode.connections.length})</div>
+                      <div className="node-detail-list">
+                        {selectedNode.connections.map((c, i) => (
+                          <div key={i} className="node-detail-row">
+                            <span className="node-detail-rel">{c.relation}</span>
+                            <span className="node-detail-target">{c.id}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {/* ════ TABLE ════ */}
+          {/* ── TABLE TAB ── */}
           {activeTab === "table" && (
             <div className="table-panel">
               {results.length === 0 ? (
@@ -355,25 +497,42 @@ export default function App() {
                   <div className="empty-hint">Run a query to see data here</div>
                 </div>
               ) : (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>#</th><th>Company</th><th>Country</th><th>Industry</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.map((r, i) => (
-                      <tr key={i} style={{ animationDelay: `${i * 50}ms` }}>
-                        <td style={{ color:"var(--text-muted)", fontSize:12, fontFamily:"var(--font-mono)" }}>
-                          {String(i+1).padStart(2,"0")}
-                        </td>
-                        <td className="td-company">{r.company || r}</td>
-                        <td className="td-country">{r.country  || "—"}</td>
-                        <td className="td-industry">{r.industry || "—"}</td>
+                <>
+                  <div className="table-actions">
+                    <span className="table-count">{results.length} result{results.length !== 1 ? "s" : ""}</span>
+                    <button
+                      className="table-export-btn"
+                      onClick={() => { exportCSV(results, query); toast("CSV downloaded", "success", "📥"); }}
+                    >
+                      ↓ Export CSV
+                    </button>
+                  </div>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>#</th><th>Company</th><th>Country</th><th>Industry</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {results.map((r, i) => (
+                        <tr
+                          key={i}
+                          style={{ animationDelay: `${i * 50}ms` }}
+                          onClick={() => setHighlights([r.company])}
+                          className="table-row-clickable"
+                          title="Click to highlight in graph"
+                        >
+                          <td style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "var(--font-mono)" }}>
+                            {String(i + 1).padStart(2, "0")}
+                          </td>
+                          <td className="td-company">{r.company || r}</td>
+                          <td className="td-country">{r.country  || "—"}</td>
+                          <td className="td-industry">{r.industry || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               )}
             </div>
           )}
