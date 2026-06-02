@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import GraphView, { GraphViewAPI } from "./GraphView";
 import "./App.css";
 
-const API = "http://localhost:8000";
+const API = "http://localhost:8001";
 
 // ── Animated counter ─────────────────────────────────────
 function useCountUp(target, duration = 800) {
@@ -168,12 +168,13 @@ export default function App() {
       setAnswer(data.answer);
       setAnswerState("active");
       setSource(data.source || "mock");
+      console.log("Companies from API:", data.companies);
       setHighlights(data.companies || []);
       setQueryCount((n) => n + 1);    // NEW: session query counter
       toast("Query complete", "success", "✅");
     } catch {
       setAnswerState("error");
-      setAnswer("Cannot reach the backend.\n\nRun in your terminal:\n\n  cd backend\n  uvicorn api:app --reload --port 8000");
+      setAnswer("Cannot reach the backend.\n\nRun in your terminal:\n\n  cd backend\n  uvicorn api:app --reload --port 8001");
       toast("Backend unreachable", "error", "❌");
     } finally {
       setLoading(false);

@@ -18,10 +18,10 @@ NEO4J_PASSWORD = "12345678"
 try:
     from milestone3.rag_pipeline import search_companies, get_company_info, ask_llama
     PIPELINE_OK = True
-    print("✅ RAG Pipeline loaded successfully")
+    print("[OK] RAG Pipeline loaded successfully")
 except Exception as e:
     PIPELINE_OK = False
-    print(f"⚠  RAG Pipeline import failed: {e}")
+    print(f"[WARNING] RAG Pipeline import failed: {e}")
     traceback.print_exc()
 
 # ════════════════════════════════════════════════════════════
@@ -157,7 +157,7 @@ def query_endpoint(req: QueryRequest):
             "source": "error"
         }
     try:
-        print(f"\n📥 Query: {req.query}")
+        print(f"\nQuery: {req.query}")
         companies_list = search_companies(req.query)
         if not companies_list:
             return {
