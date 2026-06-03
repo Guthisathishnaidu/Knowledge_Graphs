@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: knowledge-graph-backend
+    env: docker
+    rootDir: backend
+    plan: starter # You may need starter/standard because torch consumes a lot of RAM
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USERNAME
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

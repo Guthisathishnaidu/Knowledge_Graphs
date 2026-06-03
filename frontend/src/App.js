@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import GraphView, { GraphViewAPI } from "./GraphView";
 import "./App.css";
 
-const API = "http://localhost:8001";
+const API = process.env.REACT_APP_API_URL || "http://localhost:8001";
 
 // ── Animated counter ─────────────────────────────────────
 function useCountUp(target, duration = 800) {
