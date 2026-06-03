@@ -1,11 +1,8 @@
 {
-  "dependencies": {
-    "react-force-graph": "^1.48.2"
-  },
   "scripts": {
-    "frontend": "cd frontend && npm start",
-    "backend": "cd backend && python -m uvicorn api:app --reload --port 8001",
-    "dev": "concurrently \"npm run backend\" \"npm run frontend\""
+    "frontend": "cd frontend && react-scripts start",
+    "backend":  "cd backend && python -m uvicorn api:app --reload --port 8000",
+    "dev":      "concurrently \"npm run backend\" \"npm run frontend\""
   },
   "devDependencies": {
     "concurrently": "^10.0.1"

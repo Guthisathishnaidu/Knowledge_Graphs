@@ -26,7 +26,6 @@ const NODE_STYLES = {
   },
 };
 
-// Public API — call via GraphViewAPI.resetView() etc. from App.js
 export const GraphViewAPI = {
   resetView:     () => {},
   zoomIn:        () => {},
@@ -42,7 +41,7 @@ function GraphView({ nodes = [], edges = [], highlightIds = [], onNodeClick }) {
   const networkRef   = useRef(null);
   const visNodesRef  = useRef(null);
   const visEdgesRef  = useRef(null);
-  const physicsOnRef = useRef(false); // FIX: was IIFE closure — resets on every render
+  const physicsOnRef = useRef(false);
 
   const buildNetwork = useCallback(() => {
     if (!containerRef.current || !window.vis || nodes.length === 0) return;
@@ -95,7 +94,6 @@ function GraphView({ nodes = [], edges = [], highlightIds = [], onNodeClick }) {
       physicsOnRef.current = false;
     });
 
-    // Node click → parent callback with full connection info
     networkRef.current.on("click", (params) => {
       if (params.nodes.length > 0 && onNodeClick) {
         const nodeId = params.nodes[0];
@@ -104,20 +102,18 @@ function GraphView({ nodes = [], edges = [], highlightIds = [], onNodeClick }) {
           (e) => e.from === nodeId || e.to === nodeId
         );
         const connections = connectedEdges.map((e) => ({
-          id:       e.from === nodeId ? e.to : e.from,
-          relation: e.label,
+          id:        e.from === nodeId ? e.to : e.from,
+          relation:  e.label,
           direction: e.from === nodeId ? "out" : "in",
         }));
         onNodeClick({ id: nodeId, label: nodeData?.label, type: nodeData?._type, connections });
       }
     });
 
-    // Wire public API — FIX: assigned here so they always have current refs
     GraphViewAPI.resetView   = () => networkRef.current?.fit({ animation: { duration: 600, easingFunction: "easeInOutQuad" } });
     GraphViewAPI.zoomIn      = () => networkRef.current?.moveTo({ scale: (networkRef.current.getScale() || 1) * 1.3 });
     GraphViewAPI.zoomOut     = () => networkRef.current?.moveTo({ scale: (networkRef.current.getScale() || 1) / 1.3 });
 
-    // FIX: physicsOnRef persists across renders
     GraphViewAPI.togglePhysics = () => {
       physicsOnRef.current = !physicsOnRef.current;
       networkRef.current?.setOptions({ physics: { enabled: physicsOnRef.current } });
@@ -131,16 +127,16 @@ function GraphView({ nodes = [], edges = [], highlightIds = [], onNodeClick }) {
         return;
       }
       const lower = term.toLowerCase();
-      const all = visNodesRef.current.get();
-      const matched = all.filter((n) =>
-        (n.id + "").toLowerCase().includes(lower) ||
-        (n.label + "").toLowerCase().includes(lower)
+      const all   = visNodesRef.current.get();
+      const matchedIds = new Set(
+        all.filter((n) =>
+          (n.id + "").toLowerCase().includes(lower) ||
+          (n.label + "").toLowerCase().includes(lower)
+        ).map((n) => n.id)
       );
-      const matchedIds = new Set(matched.map((n) => n.id));
       visNodesRef.current.update(all.map((n) => ({ id: n.id, opacity: matchedIds.has(n.id) ? 1 : 0.12 })));
-      if (matched.length > 0) {
+      if (matchedIds.size > 0)
         networkRef.current?.fit({ nodes: [...matchedIds], animation: { duration: 500, easingFunction: "easeInOutQuad" } });
-      }
     };
 
     GraphViewAPI.filterTypes = (visibleTypes) => {
@@ -163,7 +159,7 @@ function GraphView({ nodes = [], edges = [], highlightIds = [], onNodeClick }) {
 
   useEffect(() => { buildNetwork(); }, [buildNetwork]);
 
-  // Highlight matching nodes when query results arrive
+  // Highlight nodes when search results arrive
   useEffect(() => {
     if (!networkRef.current || !visNodesRef.current || highlightIds.length === 0) return;
 
@@ -174,11 +170,13 @@ function GraphView({ nodes = [], edges = [], highlightIds = [], onNodeClick }) {
     highlightIds.forEach((name) => {
       const node = all.find((n) => n.id === name);
       if (!node) return;
+
       focusIds.push(node.id);
       visNodesRef.current.update([{ id: node.id, opacity: 1, size: 32 }]);
+
+      // FIX: removed dead `nbr` variable — directly compute nbrId cleanly
       visEdgesRef.current.get().forEach((e) => {
-        const nbr = e.from === node.id ? e.to : e.from === node.id ? null : e.from;
-        if (nbr && (e.from === node.id || e.to === node.id)) {
+        if (e.from === node.id || e.to === node.id) {
           const nbrId = e.from === node.id ? e.to : e.from;
           focusIds.push(nbrId);
           visNodesRef.current.update([{ id: nbrId, opacity: 0.85, size: 20 }]);
@@ -186,13 +184,18 @@ function GraphView({ nodes = [], edges = [], highlightIds = [], onNodeClick }) {
       });
     });
 
-    if (focusIds.length > 0) {
+    if (focusIds.length > 0)
       networkRef.current.fit({ nodes: [...new Set(focusIds)], animation: { duration: 800, easingFunction: "easeInOutQuad" } });
-    }
 
     const timer = setTimeout(() => {
       if (visNodesRef.current)
-        visNodesRef.current.update(visNodesRef.current.get().map((n) => ({ id: n.id, opacity: 1 })));
+        visNodesRef.current.update(
+          visNodesRef.current.get().map((n) => ({
+            id:      n.id,
+            opacity: 1,
+            size:    (NODE_STYLES[n._type] || NODE_STYLES.default).size,
+          }))
+        );
     }, 6000);
     return () => clearTimeout(timer);
   }, [highlightIds]);
