@@ -6,11 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # ════════════════════════════════════════════════════════════
-#  CONFIG  — fixed to your actual Neo4j connection URL
+#  CONFIG  — Reads from environment variables for production
 # ════════════════════════════════════════════════════════════
-NEO4J_URI = "bolt://localhost:7687"  # ← your connection URL
-NEO4J_USER     = "neo4j"
-NEO4J_PASSWORD = "12345678"
+NEO4J_URI      = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER     = os.getenv("NEO4J_USERNAME", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "12345678")
 
 # ════════════════════════════════════════════════════════════
 #  PIPELINE IMPORT
