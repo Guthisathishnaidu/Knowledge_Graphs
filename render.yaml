@@ -3,7 +3,7 @@ services:
     name: knowledge-graph-backend
     env: docker
     rootDir: backend
-    plan: starter # You may need starter/standard because torch consumes a lot of RAM
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: PORT
