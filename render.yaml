@@ -2,7 +2,6 @@ services:
   - type: web
     name: knowledge-graph-backend
     env: docker
-    rootDir: backend
     plan: free
     healthCheckPath: /health
     envVars:
